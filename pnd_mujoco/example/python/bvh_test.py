@@ -18,6 +18,27 @@ from pndbotics_sdk_py.idl.default import adam_u_msg_dds__HandCmd_ # type: ignore
 
 
 ADAM_U_NUM_MOTOR = 19
+ADAM_MOTOR_DEF = [
+    'waistRoll',
+    'waistPitch',
+    'waistYaw',
+    'neckYaw',
+    'neckPitch',
+    'shoulderPitch_Left',
+    'shoulderRoll_Left',
+    'shoulderYaw_Left',
+    'elbow_Left',
+    'wristYaw_Left',
+    'wristPitch_Left',
+    'wristRoll_Left',
+    'shoulderPitch_Right',
+    'shoulderRoll_Right',
+    'shoulderYaw_Right',
+    'elbow_Right',
+    'wristYaw_Right',
+    'wristPitch_Right',
+    'wristRoll_Right'
+]
 KP_CONFIG = [
     405.0,  # waistRoll (0)
     405.0,  # waistPitch (1)
@@ -85,16 +106,43 @@ close_arm_pos = np.array([0, 0, 0,
 open_hand = np.array([1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000], dtype=int)
 close_hand = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], dtype=int)
 
-dt = 0.0025
-runing_time = 0.0
+dt = 0.010416
+
 
 # input("Press enter to start")
+
+urdf_to_bvh = {
+    'waistRoll' : ('Spine', 1),
+    'waistPitch': ('Spine', 0),
+    'waistYaw': ('Spine', 2),
+
+    'neckYaw': ('Neck', 2),
+    'neckPitch': ('Neck', 0),
+
+    'shoulderPitch_Left': ('LeftShoulder', 0),
+    # 'shoulderRoll_Left': ('LeftArm', 1),
+    'shoulderYaw_Left': ('LeftShoulder', 2),
+    'elbow_Left': ('LeftArm', 0),
+
+    # 'wristYaw_Left': ('Spine1', 2),
+    'wristPitch_Left': ('LeftHand', 0),
+
+    # 'wristRoll_Left': ('Spine1', 2),
+    'shoulderPitch_Right': ('RightShoulder', 0),
+    # 'shoulderRoll_Right': ('Spine1', 2),
+    'shoulderYaw_Right': ('RightShoulder', 2),
+    'elbow_Right': ('RightArm', 0),
+    # 'wristYaw_Right': ('Spine1', 2),
+    'wristPitch_Right': ('RightHand', 0),
+    # 'wristRoll_Right': ('Spine1', 2)
+}
 
 def importbvh():
     '''
     Docstring for importbvh
     '''
     # --- BVH → URDF mapping ---
+    # xyz is yxz in bhv
     bvh_to_urdf = {
         'Spine':   ('waistYaw',   'Z'),
         'Spine1':  ('waistPitch', 'Y'),
@@ -130,7 +178,7 @@ def importbvh():
     """
     Number of frames skipped is controlled with this variable below. If you want all frames, set to 1.
     """
-    frame_skips = 5
+    frame_skips = 1
 
     frames = []
 
@@ -153,20 +201,54 @@ def importbvh():
             joint_index += 3
         frames.append(frame_joints_rotations)
             
-    print('frame size: ', len(frames))
+    print('frame: ', frames[1])
     return frames
 
+def test_main():
+    frames = importbvh()
 
-if __name__ == '__main__':
+    runing_time = 0.0
+    # Create a publisher to publish the data defined in UserData class
+    pub = ChannelPublisher("rt/lowcmd", LowCmd_)
+    pub.Init()
+    cmd = adam_u_msg_dds__LowCmd_()
 
-    importbvh()
+    hand_pub = ChannelPublisher("rt/handcmd", HandCmd_)
+    hand_pub.Init()
+    hand_cmd = adam_u_msg_dds__HandCmd_()
 
 
-    if len(sys.argv) <2:
-        ChannelFactoryInitialize(1, "lo")
-    else:
-        ChannelFactoryInitialize(1, sys.argv[1])
+# 96 fps
+    frame_duration = 0.01041667 # a frame should take this much time
+    for frame in frames:
+        frame_start = time.perf_counter() # float value of time in seconds
 
+        for i in range(ADAM_U_NUM_MOTOR):
+            if ADAM_MOTOR_DEF[i] in urdf_to_bvh:
+                angle_deg = frame[urdf_to_bvh[ADAM_MOTOR_DEF[i]][0]][urdf_to_bvh[ADAM_MOTOR_DEF[i]][1]]
+                print(ADAM_MOTOR_DEF[i], angle_deg)
+                cmd.motor_cmd[i].q = math.radians(angle_deg)
+            else:
+                cmd.motor_cmd[i].q = 0
+
+            cmd.motor_cmd[i].kp = KP_CONFIG[i]
+            cmd.motor_cmd[i].dq = 0.0
+            cmd.motor_cmd[i].kd = KD_CONFIG[i]
+            cmd.motor_cmd[i].tau = 0.0
+
+        for i in range(12):
+            hand_cmd.position[i] = open_hand[i]
+
+        pub.Write(cmd)
+        hand_pub.Write(hand_cmd)
+
+        time_until_next_frame = frame_duration - (time.perf_counter() - frame_start)
+        if time_until_next_frame > 0:
+            time.sleep(time_until_next_frame)
+
+
+def pnd_main():
+    runing_time = 0.0
     # Create a publisher to publish the data defined in UserData class
     pub = ChannelPublisher("rt/lowcmd", LowCmd_)
     pub.Init()
@@ -185,7 +267,10 @@ if __name__ == '__main__':
     while True:
         step_start = time.perf_counter()
 
-        runing_time += dt
+        runing_time = runing_time + dt
+
+        if (runing_time > 10.0):
+            return
 
         if (runing_time < 3.0):
             # Stand up in first 3 second
@@ -204,7 +289,6 @@ if __name__ == '__main__':
             for i in range(12):
                 hand_cmd.position[i] = close_hand[i]
         else:
-            # Then stand down
             phase = np.tanh((runing_time - 3.0) / 1.2)
             for i in range(ADAM_U_NUM_MOTOR):
                 cmd.motor_cmd[i].q = phase * close_arm_pos[i] + (
@@ -225,3 +309,14 @@ if __name__ == '__main__':
         time_until_next_step = dt - (time.perf_counter() - step_start)
         if time_until_next_step > 0:
             time.sleep(time_until_next_step)
+
+if __name__ == '__main__':
+
+    if len(sys.argv) <2:
+        ChannelFactoryInitialize(1, "lo")
+    else:
+        ChannelFactoryInitialize(1, sys.argv[1])
+
+    # pnd_main()
+
+    test_main()
