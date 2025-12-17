@@ -1,7 +1,6 @@
 '''
 Docstring for pnd_mujoco.example.python.bvh_test
 '''
-import pdb
 import time
 import sys
 import numpy as np
@@ -112,29 +111,30 @@ dt = 0.010416
 # input("Press enter to start")
 
 urdf_to_bvh = {
-    'waistRoll' : ('Spine', 1),
-    'waistPitch': ('Spine', 0),
-    'waistYaw': ('Spine', 2),
+    'waistRoll' : ('Spine1', 2),
+    'waistPitch': ('Spine1', 1),
+    'waistYaw': ('Spine1', 0),
 
-    'neckYaw': ('Neck', 2),
-    'neckPitch': ('Neck', 0),
+    'neckYaw': ('Neck1', 0),
+    'neckPitch': ('Neck1', 1),
 
-    'shoulderPitch_Left': ('LeftShoulder', 0),
-    # 'shoulderRoll_Left': ('LeftArm', 1),
-    'shoulderYaw_Left': ('LeftShoulder', 2),
-    'elbow_Left': ('LeftArm', 0),
+    'shoulderPitch_Left': ('LeftArm', 1),
+    'shoulderRoll_Left': ('LeftArm', 2),
+    'shoulderYaw_Left': ('LeftArm', 0),
+    'elbow_Left': ('LeftForeArm', 1), # elbow is pitch
 
-    # 'wristYaw_Left': ('Spine1', 2),
-    'wristPitch_Left': ('LeftHand', 0),
+    'wristYaw_Left': ('LeftHand', 0),
+    'wristPitch_Left': ('LeftHand', 1),
+    'wristRoll_Left': ('LeftHand', 2),
+    
+    'shoulderPitch_Right': ('RightArm', 1),
+    'shoulderRoll_Right': ('Spine1', 2),
+    'shoulderYaw_Right': ('RightArm', 0),
+    'elbow_Right': ('RightForeArm', 1),
 
-    # 'wristRoll_Left': ('Spine1', 2),
-    'shoulderPitch_Right': ('RightShoulder', 0),
-    # 'shoulderRoll_Right': ('Spine1', 2),
-    'shoulderYaw_Right': ('RightShoulder', 2),
-    'elbow_Right': ('RightArm', 0),
-    # 'wristYaw_Right': ('Spine1', 2),
-    'wristPitch_Right': ('RightHand', 0),
-    # 'wristRoll_Right': ('Spine1', 2)
+    'wristYaw_Right': ('RightHand', 0),
+    'wristPitch_Right': ('RightHand', 1),
+    'wristRoll_Right': ('RightHand', 2)
 }
 
 def importbvh():
@@ -163,7 +163,7 @@ def importbvh():
     }
 
 
-    filename = 'pnd_mujoco/example/python/take001_chr01.bvh'
+    filename = 'example/python/take002_chr01.bvh'
     skeleton_data = ProcessBVH(filename)
     joints = skeleton_data[0]
     joints_offsets = skeleton_data[1]
@@ -188,9 +188,9 @@ def importbvh():
 
         frame_joints_rotations = {}
 
-        for joint in joints:
-            if joint in bvh_to_urdf:
-                frame_joints_rotations[joint] = []
+        # for joint in joints:
+        #     if joint in bvh_to_urdf:
+        #         frame_joints_rotations[joint] = []
 
         #fill in the rotations dict
         joint_index = 0
@@ -225,7 +225,7 @@ def test_main():
 
         for i in range(ADAM_U_NUM_MOTOR):
             if ADAM_MOTOR_DEF[i] in urdf_to_bvh:
-                angle_deg = frame[urdf_to_bvh[ADAM_MOTOR_DEF[i]][0]][urdf_to_bvh[ADAM_MOTOR_DEF[i]][1]]
+                angle_deg = (frame[urdf_to_bvh[ADAM_MOTOR_DEF[i]][0]][urdf_to_bvh[ADAM_MOTOR_DEF[i]][1]])
                 print(ADAM_MOTOR_DEF[i], angle_deg)
                 cmd.motor_cmd[i].q = math.radians(angle_deg)
             else:

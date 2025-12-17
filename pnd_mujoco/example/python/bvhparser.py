@@ -1,6 +1,6 @@
 import re
 import numpy as np
-
+import math
 
 class BvhNode:
 
@@ -365,7 +365,7 @@ def _get_rotation_chain(joint_channels, joint_rotations):
             Rot_Mat = Rot_Mat @ Rz(joint_rotations[index])
             order += 'z'
         index += 1
-    #print(order)
+    print(order)
     return Rot_Mat
 
 #Here root position is used as local coordinate origin.
@@ -412,3 +412,63 @@ def _calculate_frame_joint_positions_in_world_space(local_positions, root_positi
         world_pos[joint] = pos
 
     return world_pos
+
+def Draw_bvh(joints, joints_offsets, joints_hierarchy, root_positions, joints_rotations, joints_saved_angles):
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+
+    frame_joints_rotations = {en:[] for en in joints}
+
+    """
+    Number of frames skipped is controlled with this variable below. If you want all frames, set to 1.
+    """
+    frame_skips = 5
+
+    figure_limit = None #used to set figure axis limits
+
+    for i in range(0,len(joints_rotations), frame_skips):
+
+        frame_data = joints_rotations[i]
+
+        #fill in the rotations dict
+        joint_index = 0
+        for joint in joints:
+            frame_joints_rotations[joint] = frame_data[joint_index:joint_index+3]
+            joint_index += 3
+
+        #this returns a dictionary of joint positions in local space. This can be saved to file to get the joint positions.
+        local_pos = _calculate_frame_joint_positions_in_local_space(joints, joints_offsets, frame_joints_rotations, joints_saved_angles, joints_hierarchy)
+
+        #calculate world positions
+        world_pos = _calculate_frame_joint_positions_in_world_space(local_pos, root_positions[i], frame_joints_rotations[joints[0]], joints_saved_angles[joints[0]])
+
+        #calculate the limits of the figure. Usually the last joint in the dictionary is one of the feet.
+        if figure_limit == None:
+            lim_min = np.abs(np.min(local_pos[list(local_pos)[-1]]))
+            lim_max = np.abs(np.max(local_pos[list(local_pos)[-1]]))
+            lim = lim_min if lim_min > lim_max else lim_max
+            figure_limit = lim
+
+        for joint in joints:
+            if joint == joints[0]: continue #skip root joint
+            parent_joint = joints_hierarchy[joint][0]
+            plt.plot(xs = [local_pos[parent_joint][0], local_pos[joint][0]],
+                     zs = [local_pos[parent_joint][1], local_pos[joint][1]],
+                     ys = [local_pos[parent_joint][2], local_pos[joint][2]], c = 'blue', lw = 2.5)
+
+            #uncomment here if you want to see the world coords. If nothing appears on screen, change the axis limits below!
+            plt.plot(xs = [world_pos[parent_joint][0], world_pos[joint][0]],
+                     zs = [world_pos[parent_joint][1], world_pos[joint][1]],
+                     ys = [world_pos[parent_joint][2], world_pos[joint][2]], c = 'red', lw = 2.5)
+
+        #Depending on the file, the axis limits might be too small or too big. Change accordingly.
+        ax.set_axis_off()
+        ax.set_xlim(-0.6*figure_limit, 0.6*figure_limit)
+        ax.set_ylim(-0.6*figure_limit, 0.6*figure_limit)
+        ax.set_zlim(-0.2*figure_limit, 1.*figure_limit)
+        plt.title('frame: ' + str(i))
+        plt.pause(0.001)
+        ax.cla()
+
+    pass
